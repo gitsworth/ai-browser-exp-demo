@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Browser Demo</title>
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      display: flex; font-family: Arial, sans-serif;
+    }
+    #sidebar {
+      width: 350px;
+      border-right: 1px solid #ccc;
+      display: flex; flex-direction: column;
+    }
+    #browser {
+      flex: 1;
+      display: flex; flex-direction: column;
+    }
+    #url-bar {
+      display: flex;
+      padding: 5px;
+      border-bottom: 1px solid #ccc;
+    }
+    #url-input {
+      flex: 1;
+      font-size: 16px;
+      padding: 6px;
+    }
+    #go-button {
+      padding: 6px 12px;
+      margin-left: 5px;
+    }
+    #webview-container {
+      flex: 1;
+    }
+    webview {
+      width: 100%;
+      height: 100%;
+    }
+    #chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      overflow-y: auto;
+      border-bottom: 1px solid #ccc;
+    }
+    #chat p {
+      margin: 5px 0;
+    }
+    #input-area {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+    }
+    #chat-input {
+      flex: 1;
+      font-size: 14px;
+      padding: 8px;
+    }
+    #send-button {
+      padding: 8px 12px;
+      margin-left: 5px;
+    }
+    button {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="chat"></div>
+    <div id="input-area">
+      <input id="chat-input" type="text" placeholder="Ask AI..." />
+      <button id="send-button">Send</button>
+    </div>
+  </div>
+  <div id="browser">
+    <div id="url-bar">
+      <input id="url-input" type="text" value="https://www.google.com" />
+      <button id="go-button">Go</button>
+      <button id="summarize-button" style="margin-left: 10px;">Summarize Page</button>
+    </div>
+    <div id="webview-container">
+      <webview id="webview" src="https://www.google.com" ></webview>
+    </div>
+  </div>
+
+<script>
+  const webview = document.getElementById('webview');
+  const urlInput = document.getElementById('url-input');
+  const goButton = document.getElementById('go-button');
+  const summarizeButton = document.getElementById('summarize-button');
+  const chat = document.getElementById('chat');
+  const chatInput = document.getElementById('chat-input');
+  const sendButton = document.getElementById('send-button');
+
+  goButton.onclick = () => {
+    let url = urlInput.value.trim();
+    if (!url.startsWith('http')) url = 'https://' + url;
+    webview.loadURL(url);
+  };
+
+  // Update URL bar on navigation
+  webview.addEventListener('did-navigate-in-page', e => {
+    urlInput.value = e.url;
+  });
+  webview.addEventListener('did-navigate', e => {
+    urlInput.value = e.url;
+  });
+
+  // Mock AI logic
+  function addChatMessage(sender, text) {
+    const p = document.createElement('p');
+    p.textContent = (sender === 'user' ? 'You: ' : 'AI: ') + text;
+    chat.appendChild(p);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  // Simulate summarization
+  summarizeButton.onclick = async () => {
+    addChatMessage('user', 'Summarize this page');
+    // Fake: extract title and URL, summarize
+    const title = await webview.executeJavaScript('document.title');
+    const url = webview.getURL();
+    const summary = `This page titled "${title}" at ${url} seems interesting. It likely contains information related to its title.`;
+    addChatMessage('ai', summary);
+  };
+
+  // Flight booking detection + response
+  function checkFlightBookingIntent(text) {
+    const pattern = /book.*flight.*from\s+(\w+).*to\s+(\w+).*on\s+(\w+\s*\d{1,2})/i;
+    const match = text.match(pattern);
+    if (match) {
+      return {
+        from: match[1],
+        to: match[2],
+        date: match[3]
+      };
+    }
+    return null;
+  }
+
+  async function handleUserInput(text) {
+    addChatMessage('user', text);
+
+    // Check flight booking
+    const flight = checkFlightBookingIntent(text);
+    if (flight) {
+      const { from, to, date } = flight;
+      const searchUrl = `https://www.google.com/travel/flights?q=flights+from+${encodeURIComponent(from)}+to+${encodeURIComponent(to)}+on+${encodeURIComponent(date)}`;
+      addChatMessage('ai', `Opening flights from ${from} to ${to} on ${date} for you.`);
+      await window.electronAPI.openExternal(searchUrl);
+      return;
+    }
+
+    // Mock generic responses
+    const lower = text.toLowerCase();
+    if (lower.includes('hello') || lower.includes('hi')) {
+      addChatMessage('ai', 'Hello! How can I assist you today?');
+    } else if (lower.includes('thank')) {
+      addChatMessage('ai', 'You’re welcome!');
+    } else if (lower.includes('summarize')) {
+      summarizeButton.click();
+    } else {
+      addChatMessage('ai', 'I am still learning. Try asking to summarize a page or book a flight!');
+    }
+  }
+
+  sendButton.onclick = () => {
+    const text = chatInput.value.trim();
+    if (text) {
+      handleUserInput(text);
+      chatInput.value = '';
+    }
+  };
+
+  chatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      sendButton.click();
+    }
+  });
+</script>
+</body>
+</html>
